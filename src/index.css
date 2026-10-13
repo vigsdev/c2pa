@@ -1,0 +1,70 @@
+@import "tailwindcss";
+@import "@fontsource-variable/inter";
+
+@custom-variant dark (&:is(.dark *));
+
+@theme inline {
+  /* -apple-system resolves to SF Pro on Apple devices and is ignored elsewhere, so Inter takes over. */
+  --font-sans:
+    -apple-system, BlinkMacSystemFont, "Inter Variable", ui-sans-serif,
+    sans-serif;
+  --font-mono: ui-monospace, SFMono-Regular, Menlo, monospace;
+  --color-ring: var(--ring);
+  --color-input: var(--input);
+  --color-border: var(--border);
+  --color-destructive: var(--destructive);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-muted: var(--muted);
+  --color-card-foreground: var(--card-foreground);
+  --color-card: var(--card);
+  --color-foreground: var(--foreground);
+  --color-background: var(--background);
+}
+
+/* Same dark tokens as the vigs.dev portfolio. Dark only. */
+:root,
+.dark {
+  color-scheme: dark;
+  --background: #141414;
+  --foreground: #f2f2f2;
+  --card: #1a1a1a;
+  --card-foreground: #f2f2f2;
+  --muted: #1a1a1a;
+  --muted-foreground: #878787;
+  --destructive: oklch(0.704 0.191 22.216);
+  --border: #262626;
+  --input: oklch(1 0 0 / 15%);
+  --ring: oklch(0.556 0 0);
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+  body {
+    @apply bg-background text-foreground antialiased;
+  }
+  html {
+    @apply font-sans;
+  }
+}
+
+/* Grain lives inside <main> so it moves with the page and stays out of the overscroll area. */
+main {
+  position: relative;
+}
+
+main::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 9999;
+  pointer-events: none;
+
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='180' height='180'%3E%3Cfilter id='grain'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='3' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3CfeComponentTransfer%3E%3CfeFuncR type='linear' slope='1.5' intercept='-.25'/%3E%3CfeFuncG type='linear' slope='1.5' intercept='-.25'/%3E%3CfeFuncB type='linear' slope='1.5' intercept='-.25'/%3E%3C/feComponentTransfer%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23grain)'/%3E%3C/svg%3E");
+
+  background-repeat: repeat;
+  background-size: 180px 180px;
+  opacity: 0.6;
+  mix-blend-mode: overlay;
+}
