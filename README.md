@@ -1,75 +1,33 @@
-# React + TypeScript + Vite
+# Provenance
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+Check whether a file has C2PA Content Credentials, and what they say.
 
-Currently, two official plugins are available:
+**Use it:** [labs.vigs.dev/provenance](https://labs.vigs.dev/provenance)
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+[Content Credentials](https://c2pa.org/) (C2PA) are signed records some apps attach to a file: what made it, who signed it, what it was made from and whether AI was involved. Drop in a photo, video, audio file or PDF and Provenance shows you:
 
-## React Compiler
+- **Whether it has credentials**, and whether they check out.
+- **What made it**, such as Photoshop, After Effects or Premiere Pro.
+- **Who signed it.**
+- **What it was made from**, as a tree of the files that went into it.
+- **AI involvement**, when the credentials say the file or a part of it was AI-generated.
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+It runs in your browser. The file never leaves your computer: no uploads, no server, no account.
 
-## Expanding the ESLint configuration
+## Good to know
 
-If you are developing a production application, we recommend updating the configuration to enable type-aware lint rules:
+- **No credentials doesn't mean fake.** Most files don't have any, and many websites and apps strip them when a file is uploaded or exported.
+- **Credentials show where a file came from, not whether it's true.** They tell you who signed it and with what tool.
 
-```js
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
+## Run it locally
 
-      // Remove tseslint.configs.recommended and replace with this
-      tseslint.configs.recommendedTypeChecked,
-      // Alternatively, use this for stricter rules
-      tseslint.configs.strictTypeChecked,
-      // Optionally, add this for stylistic rules
-      tseslint.configs.stylisticTypeChecked,
-
-      // Other configs...
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
-
+```bash
+npm install
+npm run dev
 ```
 
-You can also install [eslint-plugin-react-x](https://npmx.dev/package/eslint-plugin-react-x) and [eslint-plugin-react-dom](https://npmx.dev/package/eslint-plugin-react-dom) for React-specific lint rules:
+Built with React, TypeScript, Vite, Tailwind and the Content Authenticity Initiative's [c2pa-web](https://github.com/contentauth/c2pa-js).
 
-```js
-// eslint.config.js
-import reactX from 'eslint-plugin-react-x'
-import reactDom from 'eslint-plugin-react-dom'
+---
 
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-      // Enable lint rules for React
-      reactX.configs['recommended-typescript'],
-      // Enable lint rules for React DOM
-      reactDom.configs.recommended,
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
-
-```
+Part of [Lab](https://labs.vigs.dev), small tools by [Vigs](https://vigs.dev).
