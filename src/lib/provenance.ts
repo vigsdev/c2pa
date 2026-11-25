@@ -1,5 +1,11 @@
 import type { Action, Ingredient, Manifest, ManifestStore } from '@contentauth/c2pa-web'
 
+/**
+ * Signer reports that say nothing about the file itself: "untrusted" because this page doesn't load a trust list,
+ * "expired" because a certificate can expire after it signed. Adobe's own checker doesn't flag either.
+ */
+export const SIGNER_ONLY = new Set(['signingCredential.untrusted', 'signingCredential.expired'])
+
 export type MediaType = 'image' | 'video' | 'audio' | 'document' | 'unknown'
 
 export interface ProvenanceNode {
@@ -26,20 +32,6 @@ export interface ProvenanceNode {
   hasFailures?: boolean
 
   children: ProvenanceNode[]
-}
-
-export interface ProvenanceSummary {
-  heading: string
-  detail?: string
-  hasFailures: boolean
-}
-
-/** Known generator names mapped to a friendlier, human-facing label. */
-const GENERATOR_LABELS: Record<string, string> = {
-  'adobe after effects (beta)': 'After Effects composition',
-  'adobe after effects': 'After Effects composition',
-  'adobe premiere pro (beta)': 'Premiere Pro edit',
-  'adobe premiere pro': 'Premiere Pro edit',
 }
 
 /** Tool names that indicate AI generation even without an explicit digitalSourceType. */
@@ -86,7 +78,7 @@ function parseSoftwareAgent(
 }
 
 /** Finds the actions list from a manifest's c2pa.actions.v2 (preferred) or c2pa.actions assertion. */
-function getActions(manifest: Manifest | undefined): Action[] {
+export function getActions(manifest: Manifest | undefined): Action[] {
   const assertion =
     manifest?.assertions?.find((a) => a.label === 'c2pa.actions.v2') ??
     manifest?.assertions?.find((a) => a.label === 'c2pa.actions')
@@ -186,77 +178,10 @@ export function buildProvenanceTree(
       aiComposite: sourceTypeFlags.aiComposite,
       instanceId: ingredient.instance_id ?? undefined,
       manifestId,
-      hasFailures: (ingredient.validation_status ?? []).some((s) => s.success === false),
+      hasFailures: (ingredient.validation_status ?? []).some(
+        (s) => s.success === false && !SIGNER_ONLY.has(s.code),
+      ),
       children,
     }
   })
-}
-
-function collectAiSources(nodes: ProvenanceNode[]): string[] {
-  const sources: string[] = []
-  for (const node of nodes) {
-    if (node.aiGenerated) {
-      const source = node.signer?.issuer ?? node.softwareAgent?.name ?? node.generator?.name
-      if (source) sources.push(source)
-    }
-    sources.push(...collectAiSources(node.children))
-  }
-  return sources
-}
-
-function mostCommon(items: string[]): string | undefined {
-  if (items.length === 0) return undefined
-  const counts = new Map<string, number>()
-  for (const item of items) counts.set(item, (counts.get(item) ?? 0) + 1)
-  return [...counts.entries()].sort((a, b) => b[1] - a[1])[0][0]
-}
-
-/** Turns a resolved node into a short, human-facing heading + detail line. */
-export function describeProvenanceNode(node: ProvenanceNode): ProvenanceSummary {
-  const mediaWord = node.mediaType && node.mediaType !== 'unknown' ? node.mediaType : 'file'
-  const hasFailures = !!node.hasFailures
-
-  if (node.aiGenerated) {
-    return {
-      heading: `AI-generated ${mediaWord}`,
-      detail: node.softwareAgent?.name ?? node.generator?.name ?? node.signer?.issuer,
-      hasFailures,
-    }
-  }
-
-  const generatorName = node.generator?.name ?? node.softwareAgent?.name
-  const friendlyGeneratorName = generatorName
-    ? (GENERATOR_LABELS[generatorName.toLowerCase()] ?? generatorName)
-    : undefined
-
-  const aiSources = collectAiSources(node.children)
-  if (aiSources.length > 0) {
-    const dominant = mostCommon(aiSources)
-    const plural = aiSources.length === 1 ? mediaWord : `${mediaWord}s`
-    return {
-      heading: friendlyGeneratorName ?? 'Composite file',
-      detail: `Contains ${aiSources.length} AI-generated ${plural}${dominant ? ` from ${dominant}` : ''}`,
-      hasFailures,
-    }
-  }
-
-  if (friendlyGeneratorName) {
-    return { heading: friendlyGeneratorName, hasFailures }
-  }
-
-  return { heading: node.title, hasFailures }
-}
-
-/** Skips single-child pass-through hops with no distinguishing info, surfacing the most descriptive node. */
-function collapseForSummary(node: ProvenanceNode): ProvenanceNode {
-  let current = node
-  while (current.children.length === 1 && !current.aiGenerated && !current.aiComposite) {
-    current = current.children[0]
-  }
-  return current
-}
-
-/** Produces one summary per top-level ingredient for the flat "Where this file came from" list. */
-export function getFlatProvenanceSummaries(tree: ProvenanceNode[]): ProvenanceSummary[] {
-  return tree.map((node) => describeProvenanceNode(collapseForSummary(node)))
 }

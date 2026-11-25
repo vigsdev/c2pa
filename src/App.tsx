@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react"
 import { AssetTooLargeError, Reader } from "@contentauth/c2pa-web"
-import { CopyIcon, ShieldCheckIcon, UploadIcon } from "lucide-react"
+import { CopyIcon, ShieldCheckIcon, TriangleAlertIcon, UploadIcon } from "lucide-react"
 import { OverscrollMessages } from "@/components/overscroll-messages"
 import { SiteFooter } from "@/components/site-footer"
 import { cn } from "@/lib/utils"
@@ -8,11 +8,12 @@ import { getC2pa } from "./lib/c2pa"
 import {
   formatBytes,
   formatDate,
-  nonTrustFailures,
+  formatLabel,
+  realFailures,
   summarizeManifest,
   type ManifestSummary,
 } from "./lib/manifest"
-import { getFlatProvenanceSummaries, type ProvenanceNode } from "./lib/provenance"
+import type { ProvenanceNode } from "./lib/provenance"
 
 type Status = "engine-loading" | "ready" | "checking" | "done" | "error"
 
@@ -144,6 +145,36 @@ function MediaPlayer({ fileUrl, fileType }: { fileUrl: string; fileType: string 
 
 const warningNote = "text-destructive"
 
+function Fact({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <div className="flex flex-col gap-1.5">
+      <dt className="text-muted-foreground">{label}</dt>
+      <dd className="break-words text-foreground">{children}</dd>
+    </div>
+  )
+}
+
+function Chips({ items }: { items: string[] }) {
+  return (
+    <span className="flex flex-wrap gap-1.5">
+      {items.map((item) => (
+        <span key={item} className="rounded-full border border-border px-2.5 py-1 text-xs leading-4">
+          {item}
+        </span>
+      ))}
+    </span>
+  )
+}
+
+function IssueLine({ children }: { children: React.ReactNode }) {
+  return (
+    <li className="flex items-start gap-2">
+      <TriangleAlertIcon className="mt-px size-4 shrink-0 text-muted-foreground" aria-hidden="true" />
+      <span>{children}</span>
+    </li>
+  )
+}
+
 /** Recursively renders the full resolved provenance tree for the "View provenance tree" toggle. */
 function ProvenanceTreeView({ nodes, root = true }: { nodes: ProvenanceNode[]; root?: boolean }) {
   if (nodes.length === 0) return null
@@ -155,8 +186,8 @@ function ProvenanceTreeView({ nodes, root = true }: { nodes: ProvenanceNode[]; r
           {node.signer?.issuer && (
             <span className="text-muted-foreground"> · {node.signer.issuer}</span>
           )}
-          {node.aiGenerated && <span className="text-foreground italic"> · AI-generated</span>}
-          {node.hasFailures && <span className={warningNote}> · couldn't be fully verified</span>}
+          {node.aiGenerated && <span className="text-foreground"> · AI-generated</span>}
+          {node.hasFailures && <span className={warningNote}> · can't be validated</span>}
           <ProvenanceTreeView nodes={node.children} root={false} />
         </li>
       ))}
@@ -352,17 +383,17 @@ function App() {
                 <h1 className="text-[26px] leading-8 font-medium tracking-[-0.025em] text-foreground/90">
                   Provenance
                 </h1>
-                <p className="text-[13px] leading-[18px] text-foreground/70 italic">
+                <p className="text-[13px] leading-[18px] text-foreground/70">
                   Web Tool · C2PA · Content Credentials
                 </p>
               </div>
             </div>
 
             <div className={cn(body, "flex flex-col gap-3 pt-2")}>
-              <p className="text-foreground">Is this file real?</p>
+              <p className="text-foreground">How was this file made?</p>
               <p>
-                Check a photo, video, audio file, or PDF for <Strong>Content Credentials</Strong>, a
-                digital record of how a file was created or edited.
+                Check a photo, video, audio file, or PDF for <Strong>Content Credentials</Strong>: a
+                signed record of the apps, edits, and AI used to make it.
               </p>
               <p>No uploads. No server. The check happens in your browser.</p>
             </div>
@@ -457,59 +488,42 @@ function App() {
 
                 {!result.hasManifest ? (
                   <>
-                    <div className={cn(badgeBase, badgeStyles.none)}>No Content Credentials found</div>
+                    <div className={cn(badgeBase, badgeStyles.none)}>No Content Credentials</div>
                     <div className="flex flex-col gap-4 sm:flex-row">
                       <FilePreview thumbnailUrl={null} fileUrl={result.fileUrl} fileType={result.fileType} />
-                      <p className={body}>
-                        We couldn't find C2PA Content Credentials attached to this file. That{" "}
-                        <Strong>doesn't mean the file is fake</Strong>. It simply means there's no
-                        Content Credentials record here for us to check.
-                      </p>
+                      <div className={cn(body, "flex flex-col gap-3")}>
+                        <p>This file doesn't carry Content Credentials, so there's no record of how it was made.</p>
+                        <p>
+                          That's normal. Most files don't have them yet: plenty of apps don't add them, and
+                          many sites strip them when you upload. So it doesn't tell you anything either way.
+                        </p>
+                      </div>
                     </div>
                     <MediaPlayer fileUrl={result.fileUrl} fileType={result.fileType} />
                   </>
                 ) : (
                   (() => {
-                    const failures = result.summary?.failures ?? []
-                    const realIssues = nonTrustFailures(failures)
-                    const verified = failures.length === 0
-                    const generator = result.summary?.generator
-                    const issuer = result.summary?.issuer
-                    const provenanceTree = result.summary?.provenanceTree ?? []
+                    const summary = result.summary
+                    const made = summary?.made
+                    const issues = realFailures(summary?.failures ?? [])
+                    const broken = summary?.brokenIngredients ?? 0
+                    const provenanceTree = summary?.provenanceTree ?? []
+                    const meta = [
+                      formatLabel(summary?.format ?? null),
+                      formatDate(summary?.signedAt ?? null),
+                      summary?.issuer && `Signed by ${summary.issuer}`,
+                    ].filter(Boolean)
 
                     return (
                       <>
-                        <div
-                          className={cn(
-                            badgeBase,
-                            realIssues.length > 0 ? badgeStyles.warning : badgeStyles.good,
+                        <div className="flex flex-col gap-1">
+                          <div className={cn(badgeBase, badgeStyles.good)}>Content Credentials found</div>
+                          {meta.length > 0 && (
+                            <p className="pt-1 text-[13px] leading-[18px] text-muted-foreground">
+                              {meta.join(" · ")}
+                            </p>
                           )}
-                        >
-                          {realIssues.length > 0
-                            ? "Content Credentials found, but something changed"
-                            : verified
-                              ? "Verified Content Credentials"
-                              : "Content Credentials found"}
                         </div>
-
-                        {realIssues.length > 0 ? (
-                          <p className={body}>
-                            This file contains Content Credentials, but they didn't fully pass
-                            validation. The file may have been modified after the credentials were
-                            added, or part of the credential could not be verified.
-                          </p>
-                        ) : verified ? (
-                          <p className={body}>
-                            This file has Content Credentials attached. The credentials are intact, and
-                            the signer could be verified.
-                          </p>
-                        ) : (
-                          <p className={body}>
-                            This file has Content Credentials attached, and they haven't been altered
-                            since they were signed. We couldn't verify the signer's identity against a
-                            trusted source, so we'll show you exactly what the file tells us.
-                          </p>
-                        )}
 
                         <div className="flex flex-col gap-4 sm:flex-row">
                           <FilePreview
@@ -517,71 +531,62 @@ function App() {
                             fileUrl={result.fileUrl}
                             fileType={result.fileType}
                           />
-                          <dl className="grid min-w-0 flex-1 grid-cols-[auto_1fr] content-start gap-x-4 gap-y-1.5 text-[13px] leading-[18px]">
-                            <dt className="text-muted-foreground">Title</dt>
-                            <dd className="break-words text-foreground">{result.summary?.title ?? "—"}</dd>
-                            <dt className="text-muted-foreground">File type</dt>
-                            <dd className="break-words text-foreground">{result.summary?.format ?? "—"}</dd>
-                            <dt className="text-muted-foreground">Created with</dt>
-                            <dd className="break-words text-foreground">{generator ?? "—"}</dd>
-                            <dt className="text-muted-foreground">Signed by</dt>
-                            <dd className="break-words text-foreground">{issuer ?? "—"}</dd>
-                            <dt className="text-muted-foreground">Date signed</dt>
-                            <dd className="break-words text-foreground">
-                              {formatDate(result.summary?.signedAt ?? null) ?? "—"}
-                            </dd>
-                          </dl>
+                          <div className="flex min-w-0 flex-1 flex-col gap-3">
+                            <h3 className="text-[15px] leading-5 font-medium">How this was made</h3>
+                            <dl className="flex flex-col gap-3 text-[13px] leading-[18px]">
+                              <Fact label="Made with">{made?.madeWith ?? "Not recorded"}</Fact>
+                              {made && made.tools.length > 0 && (
+                                <Fact label="Includes parts made with">
+                                  <Chips items={made.tools} />
+                                </Fact>
+                              )}
+                              {made && made.models.length > 0 && (
+                                <Fact label="AI models used">
+                                  <Chips items={made.models} />
+                                </Fact>
+                              )}
+                              <Fact label="AI">
+                                {made?.ai === "made"
+                                  ? "Made with AI"
+                                  : made?.ai === "includes"
+                                    ? "Includes AI-generated parts"
+                                    : "No AI recorded"}
+                              </Fact>
+                            </dl>
+                          </div>
                         </div>
 
                         <MediaPlayer fileUrl={result.fileUrl} fileType={result.fileType} />
 
-                        {provenanceTree.length > 0 && (
+                        {(issues.length > 0 || broken > 0) && (
                           <div className="flex flex-col gap-2 border-t border-border pt-4">
-                            <h3 className="text-[15px] leading-5 font-medium">Where this file came from</h3>
-                            <ul className="flex list-disc flex-col gap-1 pl-5 text-[13px] leading-[18px]">
-                              {getFlatProvenanceSummaries(provenanceTree).map((s, i) => (
-                                <li key={i}>
-                                  <span className="font-medium text-foreground">{s.heading}</span>
-                                  {s.detail && <span className="text-muted-foreground"> · {s.detail}</span>}
-                                  {s.hasFailures && (
-                                    <span className={warningNote}> · couldn't be fully verified</span>
-                                  )}
-                                </li>
-                              ))}
+                            <h3 className="text-[15px] leading-5 font-medium">Some details need a second look</h3>
+                            <ul className="flex flex-col gap-1.5 text-[13px] leading-[18px] text-muted-foreground">
+                              {issues.length > 0 && (
+                                <IssueLine>
+                                  {issues.some((f) => /mismatch|hash/i.test(f.code))
+                                    ? "The file was changed after its Content Credentials were signed, so they may not describe what you're looking at."
+                                    : "Part of this file's Content Credentials can't be validated."}
+                                </IssueLine>
+                              )}
+                              {broken > 0 && (
+                                <IssueLine>
+                                  {broken === 1
+                                    ? "One of the files used to make this has Content Credentials that can't be validated."
+                                    : `${broken} of the files used to make this have Content Credentials that can't be validated.`}
+                                </IssueLine>
+                              )}
                             </ul>
-                            <details className="text-[13px] leading-[18px] text-muted-foreground">
-                              <summary className="w-fit cursor-pointer transition-colors hover:text-foreground">
-                                View provenance tree
-                              </summary>
-                              <ProvenanceTreeView nodes={provenanceTree} />
-                            </details>
                           </div>
                         )}
 
-                        {realIssues.length === 0 && (generator || issuer) && (
-                          <div className="flex flex-col gap-2 border-t border-border pt-4">
-                            <h3 className="text-[15px] leading-5 font-medium">What does this mean?</h3>
-                            <p className="text-[13px] leading-[18px] text-muted-foreground">
-                              The Content Credentials attached to this file are intact.
-                              {generator && (
-                                <>
-                                  {" "}
-                                  They say the file was created with <Strong>{generator}</Strong>
-                                </>
-                              )}
-                              {issuer && (
-                                <>
-                                  {generator ? " and signed by " : " They were signed by "}
-                                  <Strong>{issuer}</Strong>
-                                </>
-                              )}
-                              .
-                            </p>
-                            <p className="text-[13px] leading-[18px] text-muted-foreground">
-                              This does <Strong>not</Strong> independently prove that everything in the
-                              file is true. It verifies the provenance information attached to it.
-                            </p>
-                          </div>
+                        {provenanceTree.length > 0 && (
+                          <details className="border-t border-border pt-4 text-[13px] leading-[18px] text-muted-foreground">
+                            <summary className="w-fit cursor-pointer transition-colors hover:text-foreground">
+                              Show sources
+                            </summary>
+                            <ProvenanceTreeView nodes={provenanceTree} />
+                          </details>
                         )}
 
                         <details className="border-t border-border pt-4 text-[13px] leading-[18px] text-muted-foreground">
