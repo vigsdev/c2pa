@@ -16,8 +16,8 @@ It runs in your browser. The file never leaves your computer: no uploads, no ser
 
 ## Good to know
 
-- **No credentials doesn't mean fake.** Most files don't have any, and many websites and apps strip them when a file is uploaded or exported.
-- **Credentials show where a file came from, not whether it's true.** They tell you who signed it and with what tool.
+- **No credentials tells you nothing either way.** Most files don't have any, and many websites and apps strip them when a file is uploaded or exported.
+- **Credentials describe how a file was made.** They say which apps, services and AI models made it, and who signed it.
 
 ## Run it locally
 
